@@ -30,10 +30,13 @@ class AuthController extends Controller
         }
         $token = $user->createToken('auth_token')->plainTextToken;
         return response()->json([
-            'user' => $user->load('userDocument'),
-            'token' => $token,
-            'roles' => $user->getRoleNames(),
-            'permissions' => $user->getAllPermissions()->pluck('name')
+            'status' => true,
+            'data' => [
+                'user' => $user->load('userDocument'),
+                'token' => $token,
+                'roles' => $user->getRoleNames(),
+                'permissions' => $user->getAllPermissions()->pluck('name')
+            ]
         ]);
     }
     public function logout(Request $request)
