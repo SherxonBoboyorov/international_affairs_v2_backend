@@ -16,18 +16,19 @@ class UserDocument extends Model
         'academic_degree',
         'work_place',
         'position',
-        'science_field',
+        'science_field_id',
+        'diploma_file',
         'diploma_issued_by',
         'orcid',
     ];
 
+    public function scienceField(): BelongsTo
+    {
+        return $this->belongsTo(ScientificActivity::class, 'science_field_id');
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function getScienceFieldUrlAttribute()
-    {
-        return $this->science_field_path ? Storage::url($this->science_field_path) : null;
     }
 }

@@ -35,7 +35,6 @@ class AuthController extends Controller
                 'user' => $user->load('userDocument'),
                 'token' => $token,
                 'roles' => $user->getRoleNames(),
-                'permissions' => $user->getAllPermissions()->pluck('name')
             ]
         ]);
     }

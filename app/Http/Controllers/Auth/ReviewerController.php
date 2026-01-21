@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 class ReviewerController extends Controller
 {
@@ -22,7 +23,8 @@ class ReviewerController extends Controller
             'academic_degree' => 'required|string|max:255',
             'work_place' => 'required|string|max:255',
             'position' => 'required|string|max:255',
-            'science_field' => 'nullable|file|mimes:pdf,doc,docx',
+            'science_field_id' => 'required|exists:scientific_activities,id',
+            'diploma_file' => 'required|file|mimes:pdf,doc,docx|max:5120',
             'diploma_issued_by' => 'required|string|max:255',
             'orcid' => 'nullable|string|max:255',
         ]);
@@ -38,9 +40,11 @@ class ReviewerController extends Controller
             'password' => Hash::make($request->password),
             'active' => false,
         ]);
-        if ($request->hasFile('science_field')) {
-            $scienceFieldFile = $request->file('science_field');
-            $scienceFieldPath = $scienceFieldFile->store('science_fields', 'public');
+        $diplomaFilePath = null;
+        if ($request->hasFile('diploma_file')) {
+            $file = $request->file('diploma_file');
+            $fileName = time() . '_' . $file->getClientOriginalName();
+            $diplomaFilePath = $file->storeAs('diplomas', $fileName, 'public');
         }
         UserDocument::create([
             'user_id' => $user->id,
@@ -48,36 +52,40 @@ class ReviewerController extends Controller
             'academic_degree' => $request->academic_degree,
             'work_place' => $request->work_place,
             'position' => $request->position,
-            'science_field' => $scienceFieldPath,
+            'science_field_id' => $request->science_field_id,
+            'diploma_file' => $diplomaFilePath,
             'diploma_issued_by' => $request->diploma_issued_by,
             'orcid' => $request->orcid,
         ]);
         $user->assignRole('reviewer');
         return response()->json([
             'status' => true,
-            'message' => 'Muvaffaqiyatli ro\'yxatdan o\'tdingiz. Chief Editor tomonidan tasdiqlanishingiz kerak.',
-            'data' => [
-                'user_id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => 'reviewer'
-            ]
+            'message' => 'Reviewer muvaffaqiyatli ro\'yxatdan o\'tdi. Chief Editor tasdiqlashini kuting.',
+            'data' => $user->load('userDocument.scienceField')
         ]);
     }
+    public function profile(): JsonResponse
+    {
+        $user = Auth::user()->load('userDocument.scienceField');
 
-    public function updateProfile(Request $request)
+        return response()->json([
+            'status' => true,
+            'data' => $user
+        ]);
+    }
+    public function updateProfile(Request $request): JsonResponse
     {
         $user = Auth::user();
 
         $validator = Validator::make($request->all(), [
-            'name' => 'sometimes|required|string|max:255',
-            'email' => 'sometimes|required|string|email|max:255|unique:users,email,' . $user->id,
+            'name' => 'required|string|max:255',
             'institutional_phone' => 'nullable|string|max:20',
-            'academic_degree' => 'sometimes|required|string|max:255',
-            'work_place' => 'sometimes|required|string|max:255',
-            'position' => 'sometimes|required|string|max:255',
-            'science_field' => 'nullable|file|mimes:pdf,doc,docx',
-            'diploma_issued_by' => 'sometimes|required|string|max:255',
+            'academic_degree' => 'required|string|max:255',
+            'work_place' => 'required|string|max:255',
+            'position' => 'required|string|max:255',
+            'science_field_id' => 'required|exists:science_fields,id',
+            'diploma_file' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
+            'diploma_issued_by' => 'required|string|max:255',
             'orcid' => 'nullable|string|max:255',
         ]);
         if ($validator->fails()) {
@@ -86,26 +94,33 @@ class ReviewerController extends Controller
                 'errors' => $validator->errors()
             ], 422);
         }
-        $userData = $request->only(['name', 'email']);
-
-
-
-        $user->update($userData);
-        $documentData = $request->only([
-            'institutional_phone', 'academic_degree', 'work_place',
-            'position', 'science_field', 'diploma_issued_by', 'orcid'
+        $user->update([
+            'name' => $request->name,
         ]);
-        if ($request->hasFile('science_field')) {
-            $scienceFieldFile = $request->file('science_field');
-            $documentData['science_field_path'] = $scienceFieldFile->store('science_fields', 'public');
+        $diplomaFilePath = $user->userDocument->diploma_file;
+        if ($request->hasFile('diploma_file')) {
+            if ($diplomaFilePath) {
+                Storage::disk('public')->delete($diplomaFilePath);
+            }
+
+            $file = $request->file('diploma_file');
+            $fileName = time() . '_' . $file->getClientOriginalName();
+            $diplomaFilePath = $file->storeAs('diplomas', $fileName, 'public');
         }
-        $user->userDocument()->updateOrCreate(
-            ['user_id' => $user->id],
-            $documentData
-        );
+        $user->userDocument->update([
+            'institutional_phone' => $request->institutional_phone,
+            'academic_degree' => $request->academic_degree,
+            'work_place' => $request->work_place,
+            'position' => $request->position,
+            'science_field_id' => $request->science_field_id,
+            'diploma_file' => $diplomaFilePath,
+            'diploma_issued_by' => $request->diploma_issued_by,
+            'orcid' => $request->orcid,
+        ]);
         return response()->json([
             'status' => true,
-            'message' => 'Profil muvaffaqiyatli yangilandi'
+            'message' => 'Profil muvaffaqiyatli yangilandi',
+            'data' => $user->load('userDocument.scienceField')
         ]);
     }
 }
