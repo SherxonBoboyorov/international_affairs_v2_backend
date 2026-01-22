@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Validator;
 
 class ChiefEditorSubmissionController extends Controller
 {
-    public function dashboard(): JsonResponse
+    public function appointmentOfReviewers(): JsonResponse
     {
         $stats = [
             'total_submissions' => Submission::count(),

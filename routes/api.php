@@ -15,16 +15,21 @@ Route::post('forgot-password', [ForgotPasswordController::class, 'sendResetCode'
 Route::post('verify-reset-code', [ForgotPasswordController::class, 'verifyCode']);
 Route::post('reset-password', [ForgotPasswordController::class, 'reset']);
 Route::middleware('auth:sanctum')->group(function () {
-    Route::get('profile', [ReviewerController::class, 'profile']);
-    Route::put('profile', [ReviewerController::class, 'updateProfile']);
+
+    Route::get('profile/get', [ReviewerController::class, 'profile']);
+    Route::put('profile/update', [ReviewerController::class, 'updateProfile']);
+    Route::put('profile/change-password', [ReviewerController::class, 'changePassword']);
+
     Route::prefix('chief-editor')->middleware('role:editor')->group(function () {
-        Route::get('dashboard', [ChiefEditorSubmissionController::class, 'dashboard']);
+        Route::get('appointment-of-reviewers', [ChiefEditorSubmissionController::class, 'appointmentOfReviewers']);
         Route::get('reviewers/pending', [ChiefEditorController::class, 'pendingReviewers']);
         Route::get('reviewers/approved', [ChiefEditorController::class, 'approvedReviewers']);
         Route::get('reviewers/{id}', [ChiefEditorController::class, 'showReviewer']);
         Route::get('reviewers/available', [ChiefEditorSubmissionController::class, 'getReviewers']);
         Route::post('reviewers/{id}/approve', [ChiefEditorController::class, 'approveReviewer']);
         Route::post('reviewers/{id}/reject', [ChiefEditorController::class, 'rejectReviewer']);
+        Route::get('archived-reviewers', [ChiefEditorController::class, 'archivedReviewers']);
+        Route::get('archived-reviewers/{id}', [ChiefEditorController::class, 'showArchivedReviewer']);
         Route::prefix('submissions')->group(function () {
             Route::get('/', [ChiefEditorSubmissionController::class, 'index']);
             Route::get('{id}', [ChiefEditorSubmissionController::class, 'show']);
@@ -39,6 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('reviewer')->middleware('role:reviewer')->group(function () {
         Route::get('dashboard', [ReviewerSubmissionController::class, 'dashboard']);
         Route::prefix('submissions')->group(function () {
+
             Route::get('assigned', [ReviewerSubmissionController::class, 'assignedSubmissions']);
             Route::get('{id}', [ReviewerSubmissionController::class, 'showSubmission']);
             Route::get('{id}/download', [ReviewerSubmissionController::class, 'downloadFile']);

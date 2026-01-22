@@ -20,6 +20,7 @@ class UserDocument extends Model
         'diploma_file',
         'diploma_issued_by',
         'orcid',
+        'rejection_reason'
     ];
 
     public function scienceField(): BelongsTo
