@@ -3,10 +3,9 @@
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\ReviewerController;
+use App\Http\Controllers\Editor\ArticleReviewersController;
 use App\Http\Controllers\Editor\ChiefEditorController;
-use App\Http\Controllers\Editor\ChiefEditorSubmissionController;
 use App\Http\Controllers\RequirementsController;
-use App\Http\Controllers\Reviewer\ReviewerSubmissionController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('register', [ReviewerController::class, 'register']);
@@ -15,48 +14,28 @@ Route::post('forgot-password', [ForgotPasswordController::class, 'sendResetCode'
 Route::post('verify-reset-code', [ForgotPasswordController::class, 'verifyCode']);
 Route::post('reset-password', [ForgotPasswordController::class, 'reset']);
 Route::middleware('auth:sanctum')->group(function () {
-
     Route::get('profile/get', [ReviewerController::class, 'profile']);
     Route::put('profile/update', [ReviewerController::class, 'updateProfile']);
     Route::put('profile/change-password', [ReviewerController::class, 'changePassword']);
-
     Route::prefix('chief-editor')->middleware('role:editor')->group(function () {
-        Route::get('appointment-of-reviewers', [ChiefEditorSubmissionController::class, 'appointmentOfReviewers']);
+        Route::prefix('reviewer-articles')->group(function () {
+            Route::get('/', [ArticleReviewersController::class, 'index']);
+            Route::post('/', [ArticleReviewersController::class, 'store']);
+            Route::get('overdue', [ArticleReviewersController::class, 'overdueArticles']);
+            Route::get('{id}', [ArticleReviewersController::class, 'show']);
+            Route::post('{id}/send-to-reviewers', [ArticleReviewersController::class, 'sendToReviewers']);
+        });
+
         Route::get('reviewers/pending', [ChiefEditorController::class, 'pendingReviewers']);
         Route::get('reviewers/approved', [ChiefEditorController::class, 'approvedReviewers']);
         Route::get('reviewers/{id}', [ChiefEditorController::class, 'showReviewer']);
-        Route::get('reviewers/available', [ChiefEditorSubmissionController::class, 'getReviewers']);
         Route::post('reviewers/{id}/approve', [ChiefEditorController::class, 'approveReviewer']);
         Route::post('reviewers/{id}/reject', [ChiefEditorController::class, 'rejectReviewer']);
         Route::get('archived-reviewers', [ChiefEditorController::class, 'archivedReviewers']);
         Route::get('archived-reviewers/{id}', [ChiefEditorController::class, 'showArchivedReviewer']);
-        Route::prefix('submissions')->group(function () {
-            Route::get('/', [ChiefEditorSubmissionController::class, 'index']);
-            Route::get('{id}', [ChiefEditorSubmissionController::class, 'show']);
-            Route::post('{id}/assign-reviewer', [ChiefEditorSubmissionController::class, 'assignReviewer']);
-            Route::delete('{id}/assignments/{assignmentId}', [ChiefEditorSubmissionController::class, 'removeAssignment']);
-            Route::put('{id}/status', [ChiefEditorSubmissionController::class, 'updateStatus']);
-            Route::delete('{id}', [ChiefEditorSubmissionController::class, 'destroy']);
-            Route::get('{id}/download', [ChiefEditorSubmissionController::class, 'downloadFile']);
-        });
     });
-
-    Route::prefix('reviewer')->middleware('role:reviewer')->group(function () {
-        Route::get('dashboard', [ReviewerSubmissionController::class, 'dashboard']);
-        Route::prefix('submissions')->group(function () {
-
-            Route::get('assigned', [ReviewerSubmissionController::class, 'assignedSubmissions']);
-            Route::get('{id}', [ReviewerSubmissionController::class, 'showSubmission']);
-            Route::get('{id}/download', [ReviewerSubmissionController::class, 'downloadFile']);
-            Route::post('{id}/start', [ReviewerSubmissionController::class, 'startReview']);
-            Route::post('{id}/review', [ReviewerSubmissionController::class, 'submitReview']);
-            Route::put('review/{reviewId}', [ReviewerSubmissionController::class, 'updateReview']);
-        });
-    });
-
     Route::post('logout', [AuthController::class, 'logout']);
 });
-
 
 Route::group([
     'prefix' => 'requirements'

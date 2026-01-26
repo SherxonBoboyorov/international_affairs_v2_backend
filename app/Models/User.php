@@ -63,18 +63,10 @@ class User extends Authenticatable
         return $this->hasOne(UserDocument::class);
     }
 
-    public function submissions()
+    public function reviewerArticles()
     {
-        return $this->hasMany(Submission::class);
-    }
-
-    public function submissionReviews()
-    {
-        return $this->hasManyThrough(SubmissionReview::class, SubmissionAssignment::class, 'reviewer_id');
-    }
-
-    public function assignedSubmissions()
-    {
-        return $this->hasManyThrough(Submission::class, SubmissionAssignment::class, 'reviewer_id');
+        return $this->belongsToMany(ArticleReviewer::class, 'article_review_assignments', 'reviewer_id', 'article_reviewer_id')
+            ->withPivot(['assigned_at', 'deadline', 'status', 'comment'])
+            ->withTimestamps();
     }
 }
