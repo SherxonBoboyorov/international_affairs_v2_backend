@@ -39,10 +39,9 @@ class ArticleReviewersController extends Controller
                     'title' => $article->article_title,
                     'fio' => $article->fio,
                     'deadline' => null,
-                    'status' => 'not_assigned',
+                    'status' => $article->status,
                     'created_at' => $article->created_at,
                     'type' => 'external',
-                    'source' => 'article_considerations',
                 ];
             });
         }
@@ -104,6 +103,7 @@ class ArticleReviewersController extends Controller
             'title' => 'required|string|max:500',
             'fio' => 'required|string|max:255',
             'file' => 'required|file|mimes:pdf,doc,docx|max:10240',
+            'edited_file' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
             'deadline' => 'nullable|date|after:today',
             'description' => 'nullable|string|max:2000',
         ]);
@@ -119,10 +119,17 @@ class ArticleReviewersController extends Controller
             $filePath = $request->file('file')->store('article_reviewers', 'public');
             $data['file_path'] = $filePath;
         }
+
+        if ($request->hasFile('edited_file')) {
+            $editedFilePath = $request->file('edited_file')->store('article_reviewers/edited', 'public');
+            $data['edited_file_path'] = $editedFilePath;
+        }
+
         $article = ArticleReviewer::create([
             'title' => $request->title,
             'fio' => $request->fio,
             'file_path' => $filePath,
+            'edited_file_path' => $editedFilePath ?? null,
             'deadline' => $request->deadline,
             'description' => $request->description,
             'status' => 'not_assigned',
@@ -132,6 +139,61 @@ class ArticleReviewersController extends Controller
             'status' => true,
             'message' => 'Maqola muvaffaqiyatli qo\'shildi',
             'data' => $article
+        ]);
+    }
+
+
+    public function convertToReviewer(Request $request, $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'title' => 'required|string|max:500',
+            'fio' => 'required|string|max:255',
+            'edited_file' => 'required|file|mimes:pdf,doc,docx|max:10240',
+            'deadline' => 'nullable|date|after:today',
+            'description' => 'nullable|string|max:2000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $article = ArticleConsideration::findOrFail($id);
+
+        $editedFilePath = null;
+        if ($request->hasFile('edited_file')) {
+            $editedFilePath = $request->file('edited_file')->store('article_reviewers/edited', 'public');
+        }
+
+        $reviewerArticle = ArticleReviewer::create([
+            'title' => $request->title,
+            'fio' => $request->fio,
+            'file_path' => $article->article_file,
+            'edited_file_path' => $editedFilePath,
+            'deadline' => $request->deadline,
+            'description' => $request->description,
+            'status' => 'not_assigned',
+            'created_by' => auth()->id(),
+        ]);
+
+        $article->update(['status' => 'converted']);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Maqola muvaffaqiyatli tahrirlandi va saqlandi',
+            'data' => [
+                'id' => $reviewerArticle->id,
+                'title' => $reviewerArticle->title,
+                'fio' => $reviewerArticle->fio,
+                'file_path' => 'https://international-affairs.uz/storage/' . $reviewerArticle->file_path,
+                'edited_file_path' => $editedFilePath ? 'https://international-affairs.uz/storage/' . $editedFilePath : null,
+                'deadline' => $reviewerArticle->deadline,
+                'status' => $reviewerArticle->status,
+                'type' => 'internal',
+                'created_at' => $reviewerArticle->created_at
+            ]
         ]);
     }
 
@@ -166,13 +228,6 @@ class ArticleReviewersController extends Controller
             }
         }
 
-        if (!$article) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Maqola topilmadi'
-            ], 404);
-        }
-
         if ($source === 'external') {
             $filePath = null;
             if ($article->article_file) {
@@ -199,7 +254,6 @@ class ArticleReviewersController extends Controller
                 'original_title' => $article->article_title,
             ]);
 
-            // REVIEWERLARNI BIRIKTIRISH
             $reviewerData = [];
             foreach ($request->reviewers as $index => $reviewerId) {
                 $reviewerData[$reviewerId] = [
@@ -213,6 +267,12 @@ class ArticleReviewersController extends Controller
             $reviewerArticle->reviewers()->attach($reviewerData);
 
             $article->update(['status' => 'appointed']);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Maqola reviewerlarga yuborildi',
+                'data' => $reviewerArticle->load(['reviewers'])
+            ]);
 
         } else {
             // ArticleReviewer ni statusini yangilash va reviewerlarni biriktirish
@@ -232,46 +292,58 @@ class ArticleReviewersController extends Controller
                 ];
             }
 
+            // TO'G'RI: ArticleReviewer da reviewers() bor
             $article->reviewers()->attach($reviewerData);
-        }
 
-        return response()->json([
-            'status' => true,
-            'message' => 'Maqola reviewerlarga yuborildi',
-            'data' => $article->load(['reviewers'])
-        ]);
-    }
-
-
-    public function overdueArticles(Request $request): JsonResponse
-    {
-        $articles = ArticleReviewer::where('deadline', '<', now())
-            ->where('status', '!=', 'completed')
-            ->with(['creator'])
-            ->orderBy('deadline', 'asc')
-            ->get();
-        return response()->json([
-            'status' => true,
-            'data' => $articles
-        ]);
-    }
-
-    public function show(Request $request, $id): JsonResponse
-    {
-        $article = ArticleReviewer::with(['originalArticle', 'creator'])->find($id);
-
-        if (!$article) {
-            $article = ArticleConsideration::find($id);
-        }
-        if (!$article) {
+            // TO'G'RI: ArticleReviewer ni yuklash
             return response()->json([
-                'status' => false,
-                'message' => 'Maqola topilmadi'
-            ], 404);
+                'status' => true,
+                'message' => 'Maqola reviewerlarga yuborildi',
+                'data' => $article->load(['reviewers'])
+            ]);
         }
+    }
+
+
+    public function show($id): JsonResponse
+    {
+        $article = ArticleReviewer::with(['originalArticle'])->find($id);
+
+        if ($article) {
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'id' => $article->id,
+                    'article_title' => $article->title,
+                    'authors_name' => $article->fio,
+                    'file_path' => $article->file_path,
+                    'deadline' => $article->deadline,
+                    'status' => $article->status,
+                    'type' => 'internal',
+                ]
+            ]);
+        }
+
+        $article = ArticleConsideration::find($id);
+
+        if ($article) {
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'id' => $article->id,
+                    'article_title' => $article->article_title,
+                    'authors_name' => $article->fio,
+                    'file_path' => 'https://international-affairs.uz/storage/' . $article->article_file,
+                    'deadline' => null,
+                    'status' => $article->status,
+                    'type' => 'external',
+                ]
+            ]);
+        }
+
         return response()->json([
-            'status' => true,
-            'data' => $article
-        ]);
+            'status' => false,
+            'message' => 'Maqola topilmadi'
+        ], 404);
     }
 }

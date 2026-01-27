@@ -15,14 +15,27 @@ class ArticleReviewerAssignment extends Model
         'deadline',
         'status',
         'comment',
+        'completed_at',
+        'originality_score',
+        'methodology_score',
+        'argumentation_score',
+        'structure_score',
+        'significance_score',
+        'general_recommendation',
+        'review_comments',
+        'review_files',
     ];
     protected $casts = [
         'assigned_at' => 'datetime',
         'deadline' => 'datetime',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'completed_at' => 'datetime',
+        'review_files' => 'array',
+        'originality_score' => 'decimal:1',
+        'methodology_score' => 'decimal:1',
+        'argumentation_score' => 'decimal:1',
+        'structure_score' => 'decimal:1',
+        'significance_score' => 'decimal:1',
     ];
-    // Relationships
     public function article(): BelongsTo
     {
         return $this->belongsTo(ArticleReviewer::class, 'article_reviewer_id');
@@ -31,7 +44,6 @@ class ArticleReviewerAssignment extends Model
     {
         return $this->belongsTo(User::class, 'reviewer_id');
     }
-    // Statuslar scope
     public function scopeAssigned($query)
     {
         return $query->where('status', 'assigned');

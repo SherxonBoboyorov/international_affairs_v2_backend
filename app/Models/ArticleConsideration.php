@@ -26,6 +26,12 @@ class ArticleConsideration extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    public function reviewers()
+    {
+        return $this->hasMany(ArticleReviewer::class, 'original_article_id');
+    }
+
     public function articleReviewer(): HasOne
     {
         return $this->hasOne(ArticleReviewer::class, 'original_article_id');
@@ -37,5 +43,10 @@ class ArticleConsideration extends Model
     public function scopeAppointed($query)
     {
         return $query->where('status', 'appointed');
+    }
+
+    public function scopeConverted($query)
+    {
+        return $query->where('status', 'converted');
     }
 }

@@ -65,7 +65,7 @@ class User extends Authenticatable
 
     public function reviewerArticles()
     {
-        return $this->belongsToMany(ArticleReviewer::class, 'article_review_assignments', 'reviewer_id', 'article_reviewer_id')
+        return $this->belongsToMany(ArticleReviewer::class, 'article_reviewer_assignments', 'reviewer_id', 'article_reviewer_id')
             ->withPivot(['assigned_at', 'deadline', 'status', 'comment'])
             ->withTimestamps();
     }

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ArticleReviewer extends Model
 {
@@ -14,6 +15,7 @@ class ArticleReviewer extends Model
         'fio',
         'description',
         'file_path',
+        'edited_file_path',
         'deadline',
         'status',
         'created_by',
@@ -35,19 +37,16 @@ class ArticleReviewer extends Model
     {
         return $this->belongsTo(ArticleConsideration::class, 'original_article_id');
     }
-
-
-    public function assignments()
+    public function assignments(): HasMany
     {
         return $this->hasMany(ArticleReviewerAssignment::class, 'article_reviewer_id');
     }
-    public function reviewers()
+    public function reviewers(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'article_reviewer_assignments', 'article_reviewer_id', 'reviewer_id')
             ->withPivot(['assigned_at', 'deadline', 'status', 'comment'])
             ->withTimestamps();
     }
-
     public function scopeNotAssigned($query)
     {
         return $query->where('status', 'not_assigned');
