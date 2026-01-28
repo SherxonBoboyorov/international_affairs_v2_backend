@@ -37,7 +37,6 @@ class ArticleController extends Controller
                 'id' => $assignment->id,
                 'article_id' => $assignment->article->id,
                 'title' => $assignment->article->title,
-                'author' => $assignment->article->fio,
                 'deadline' => $assignment->deadline,
                 'status' => $assignment->status,
                 'assigned_at' => $assignment->assigned_at,
@@ -69,15 +68,13 @@ class ArticleController extends Controller
             'status' => true,
             'data' => [
                 'id' => $assignment->id,
-                'article' => [
-                    'id' => $assignment->article->id,
-                    'title' => $assignment->article->title,
-                    'description' => $assignment->article->description,
-                    'file_path' => $activeFileUrl,
-                    'assigned_at' => $assignment->assigned_at,
-                    'deadline' => $assignment->deadline,
+                'article_id' => $assignment->article->id,
+                'title' => $assignment->article->title,
+                'description' => $assignment->article->description,
+                'file_path' => $activeFileUrl,
+                'assigned_at' => $assignment->assigned_at,
+                'deadline' => $assignment->deadline,
                 ],
-            ]
         ]);
     }
 
