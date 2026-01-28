@@ -99,17 +99,26 @@ class ArticleController extends Controller
             ->where('id', $id)
             ->firstOrFail();
 
+        if ($request->status === 'assigned' && $assignment->status === 'assigned') {
+            $newStatus = 'in_progress';
+            $message = 'Maqola qabul qilindi va ish boshlandi';
+        } else {
+            $newStatus = $request->status;
+            $message = 'Status muvaffaqiyatli yangilandi';
+        }
+
         $assignment->update([
-            'status' => $request->status,
+            'status' => $newStatus,
             'comment' => $request->comment,
         ]);
 
-        if ($request->status === 'completed') {
+        if ($newStatus === 'completed') {
             $assignment->update(['completed_at' => now()]);
         }
 
         return response()->json([
             'status' => true,
+            'message' => $message,
             'data' => $assignment->load(['article'])
         ]);
     }

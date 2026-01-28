@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class ArticleReviewersController extends Controller
 {
@@ -96,7 +97,6 @@ class ArticleReviewersController extends Controller
             'data' => $paginator,
         ]);
     }
-
     public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -107,34 +107,60 @@ class ArticleReviewersController extends Controller
             'deadline' => 'nullable|date|after:today',
             'description' => 'nullable|string|max:2000',
         ]);
+
         if ($validator->fails()) {
             return response()->json([
                 'status' => false,
                 'errors' => $validator->errors()
             ], 422);
         }
-        $data = $request->all();
+
+        $filePath = null;
+        $editedFilePath = null;
 
         if ($request->hasFile('file')) {
-            $filePath = $request->file('file')->store('article_reviewers', 'public');
-            $data['file_path'] = $filePath;
+            $file = $request->file('file');
+
+            $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+            $extension = $file->getClientOriginalExtension();
+
+            $safeName = Str::slug($originalName);
+            if (!$safeName) {
+                $safeName = 'file';
+            }
+
+            $finalName = $safeName . '_' . time() . '.' . $extension;
+
+            $filePath = $file->storeAs('article_reviewers', $finalName, 'public');
         }
 
         if ($request->hasFile('edited_file')) {
-            $editedFilePath = $request->file('edited_file')->store('article_reviewers/edited', 'public');
-            $data['edited_file_path'] = $editedFilePath;
+            $file = $request->file('edited_file');
+
+            $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+            $extension = $file->getClientOriginalExtension();
+
+            $safeName = Str::slug($originalName);
+            if (!$safeName) {
+                $safeName = 'edited-file';
+            }
+
+            $finalName = $safeName . '_' . time() . '.' . $extension;
+
+            $editedFilePath = $file->storeAs('article_reviewers/edited', $finalName, 'public');
         }
 
         $article = ArticleReviewer::create([
             'title' => $request->title,
             'fio' => $request->fio,
             'file_path' => $filePath,
-            'edited_file_path' => $editedFilePath ?? null,
+            'edited_file_path' => $editedFilePath,
             'deadline' => $request->deadline,
             'description' => $request->description,
             'status' => 'not_assigned',
             'created_by' => auth()->id(),
         ]);
+
         return response()->json([
             'status' => true,
             'message' => 'Maqola muvaffaqiyatli qo\'shildi',
@@ -163,7 +189,19 @@ class ArticleReviewersController extends Controller
 
         $editedFilePath = null;
         if ($request->hasFile('edited_file')) {
-            $editedFilePath = $request->file('edited_file')->store('article_reviewers/edited', 'public');
+            $file = $request->file('edited_file');
+
+            $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+            $extension = $file->getClientOriginalExtension();
+
+            $safeName = Str::slug($originalName);
+            if (!$safeName) {
+                $safeName = 'edited-file';
+            }
+
+            $finalName = $safeName . '_' . time() . '.' . $extension;
+
+            $editedFilePath = $file->storeAs('article_reviewers/edited', $finalName, 'public');
         }
 
         $reviewerArticle = ArticleReviewer::create([
@@ -186,8 +224,12 @@ class ArticleReviewersController extends Controller
                 'id' => $reviewerArticle->id,
                 'title' => $reviewerArticle->title,
                 'fio' => $reviewerArticle->fio,
-                'file_path' => 'https://international-affairs.uz/storage/' . $reviewerArticle->file_path,
-                'edited_file_path' => $editedFilePath ? 'https://international-affairs.uz/storage/' . $editedFilePath : null,
+                'file_path' => $reviewerArticle->file_path
+                    ? asset('storage/' . $reviewerArticle->file_path)
+                    : null,
+                'edited_file_path' => $editedFilePath
+                    ? asset('storage/' . $editedFilePath)
+                    : null,
                 'deadline' => $reviewerArticle->deadline,
                 'status' => $reviewerArticle->status,
                 'type' => 'internal',
@@ -218,7 +260,23 @@ class ArticleReviewersController extends Controller
             Storage::disk('public')->delete($reviewerArticle->edited_file_path);
         }
 
-        $editedFilePath = $request->file('edited_file')->store('article_reviewers/edited', 'public');
+        $file = $request->file('edited_file');
+
+        $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+        $extension = $file->getClientOriginalExtension();
+
+        $safeName = Str::slug($originalName);
+        if (!$safeName) {
+            $safeName = 'edited-file';
+        }
+
+        $finalName = $safeName . '_' . time() . '.' . $extension;
+
+        $editedFilePath = $file->storeAs(
+            'article_reviewers/edited',
+            $finalName,
+            'public'
+        );
 
         $reviewerArticle->update([
             'edited_file_path' => $editedFilePath,
@@ -228,12 +286,11 @@ class ArticleReviewersController extends Controller
             'status' => true,
             'data' => [
                 'id' => $reviewerArticle->id,
-                'edited_file_path' => $reviewerArticle->edited_file_path,
+                'edited_file_path' =>  $reviewerArticle->edited_file_path,
                 'updated_at' => $reviewerArticle->updated_at,
             ]
         ]);
     }
-
 
     public function sendToReviewers(Request $request, $id): JsonResponse
     {
@@ -356,7 +413,9 @@ class ArticleReviewersController extends Controller
                     'article_title' => $article->title,
                     'authors_name' => $article->fio,
                     'file_path' => $article->file_path,
+                    'file_name' => $article->file_path ? basename($article->file_path) : null,
                     'edited_file_path' => $article->edited_file_path,
+                    'edited_file_name' => $article->edited_file_path ? basename($article->edited_file_path) : null,
                     'deadline' => $article->deadline,
                     'status' => $article->status,
                     'type' => 'internal',

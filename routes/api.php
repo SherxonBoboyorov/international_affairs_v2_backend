@@ -52,4 +52,5 @@ Route::group([
     'prefix' => 'requirements'
 ], function () {
     Route::get('scientific-activity', [RequirementsController::class, 'scientificActivity']);
+    Route::get('reviewer-requirements', [RequirementsController::class, 'reviewerRequirements']);
 });
