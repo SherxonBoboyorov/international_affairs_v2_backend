@@ -23,6 +23,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::prefix('reviewer-articles')->group(function () {
             Route::get('/', [ArticleReviewersController::class, 'index']);
             Route::post('/', [ArticleReviewersController::class, 'store']);
+            Route::post('/{id}/edited-file', [ArticleReviewersController::class, 'updateEditedFile']);
             Route::post('{id}/convert', [ArticleReviewersController::class, 'convertToReviewer']);
             Route::get('{id}', [ArticleReviewersController::class, 'show']);
             Route::post('{id}/send-to-reviewers', [ArticleReviewersController::class, 'sendToReviewers']);

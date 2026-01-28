@@ -196,6 +196,45 @@ class ArticleReviewersController extends Controller
         ]);
     }
 
+    public function updateEditedFile(Request $request, $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'edited_file' => 'required|file|mimes:pdf,doc,docx|max:10240',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $reviewerArticle = ArticleReviewer::findOrFail($id);
+
+        if (
+            $reviewerArticle->edited_file_path &&
+            Storage::disk('public')->exists($reviewerArticle->edited_file_path)
+        ) {
+            Storage::disk('public')->delete($reviewerArticle->edited_file_path);
+        }
+
+        $editedFilePath = $request->file('edited_file')->store('article_reviewers/edited', 'public');
+
+        $reviewerArticle->update([
+            'edited_file_path' => $editedFilePath,
+        ]);
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'id' => $reviewerArticle->id,
+                'edited_file_path' => $reviewerArticle->edited_file_path,
+                'updated_at' => $reviewerArticle->updated_at,
+            ]
+        ]);
+    }
+
+
     public function sendToReviewers(Request $request, $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
