@@ -142,14 +142,13 @@ class ArticleReviewersController extends Controller
         ]);
     }
 
-
     public function convertToReviewer(Request $request, $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'title' => 'required|string|max:500',
             'fio' => 'required|string|max:255',
             'edited_file' => 'required|file|mimes:pdf,doc,docx|max:10240',
-            'deadline' => 'nullable|date|after:today',
+            'deadline' => 'nullable|date',
             'description' => 'nullable|string|max:2000',
         ]);
 
@@ -202,8 +201,6 @@ class ArticleReviewersController extends Controller
         $validator = Validator::make($request->all(), [
             'reviewers' => 'required|array',
             'reviewers.*' => 'exists:users,id',
-            'reviewer_deadlines' => 'nullable|array',
-            'reviewer_deadlines.*' => 'date|after:today',
             'deadline' => 'nullable|date|after:today',
             'description' => 'nullable|string|max:2000',
         ]);
@@ -265,7 +262,6 @@ class ArticleReviewersController extends Controller
             }
 
             $reviewerArticle->reviewers()->attach($reviewerData);
-
             $article->update(['status' => 'appointed']);
 
             return response()->json([
@@ -275,7 +271,6 @@ class ArticleReviewersController extends Controller
             ]);
 
         } else {
-            // ArticleReviewer ni statusini yangilash va reviewerlarni biriktirish
             $article->update([
                 'status' => 'assigned',
                 'deadline' => $request->deadline,
@@ -292,18 +287,23 @@ class ArticleReviewersController extends Controller
                 ];
             }
 
-            // TO'G'RI: ArticleReviewer da reviewers() bor
             $article->reviewers()->attach($reviewerData);
 
-            // TO'G'RI: ArticleReviewer ni yuklash
+            $sentFilePath = $article->edited_file_path ?? $article->file_path;
+
             return response()->json([
                 'status' => true,
-                'message' => 'Maqola reviewerlarga yuborildi',
-                'data' => $article->load(['reviewers'])
+                'data' => [
+                    'article' => $article->load(['reviewers']),
+                    'sent_file' => [
+                        'path' => $sentFilePath,
+                        'url' => 'https://international-affairs.uz/storage/' . $sentFilePath,
+                        'type' => $article->edited_file_path ? 'edited' : 'original'
+                    ]
+                ]
             ]);
         }
     }
-
 
     public function show($id): JsonResponse
     {

@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\Validator;
 
 class ArticleController extends Controller
 {
-
     public function index(Request $request): JsonResponse
     {
         $query = ArticleReviewerAssignment::with(['article', 'article.originalArticle'])
@@ -38,9 +37,9 @@ class ArticleController extends Controller
                 'id' => $assignment->id,
                 'article_id' => $assignment->article->id,
                 'title' => $assignment->article->title,
+                'author' => $assignment->article->fio,
                 'deadline' => $assignment->deadline,
                 'status' => $assignment->status,
-                'status_name' => $assignment->status_name,
                 'assigned_at' => $assignment->assigned_at,
                 'is_overdue' => $assignment->is_overdue,
             ];
@@ -63,6 +62,9 @@ class ArticleController extends Controller
         ->where('id', $id)
         ->firstOrFail();
 
+        $activeFilePath = $assignment->article->getActiveFilePath();
+        $activeFileUrl = $activeFilePath ? $activeFilePath : null;
+
         return response()->json([
             'status' => true,
             'data' => [
@@ -70,17 +72,11 @@ class ArticleController extends Controller
                 'article' => [
                     'id' => $assignment->article->id,
                     'title' => $assignment->article->title,
-                    'author' => $assignment->article->fio,
                     'description' => $assignment->article->description,
-                    'file_path' => $assignment->article->file_path,
-                    'deadline' => $assignment->deadline,
+                    'file_path' => $activeFileUrl,
                     'assigned_at' => $assignment->assigned_at,
+                    'deadline' => $assignment->deadline,
                 ],
-                'original_article' => $assignment->article->originalArticle,
-                'status' => $assignment->status,
-                'status_name' => $assignment->status_name,
-                'comment' => $assignment->comment,
-                'is_overdue' => $assignment->is_overdue,
             ]
         ]);
     }
@@ -114,7 +110,6 @@ class ArticleController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'Status muvaffaqiyatli yangilandi',
             'data' => $assignment->load(['article'])
         ]);
     }
@@ -167,7 +162,6 @@ class ArticleController extends Controller
 
         return response()->json([
             'status' => true,
-            'message' => 'Рецензия успешно отправлена',
             'data' => $assignment->load(['article'])
         ]);
     }

@@ -27,7 +27,6 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('{id}', [ArticleReviewersController::class, 'show']);
             Route::post('{id}/send-to-reviewers', [ArticleReviewersController::class, 'sendToReviewers']);
         });
-
         Route::get('reviewers/pending', [ChiefEditorController::class, 'pendingReviewers']);
         Route::get('reviewers/approved', [ChiefEditorController::class, 'approvedReviewers']);
         Route::get('reviewers/{id}', [ChiefEditorController::class, 'showReviewer']);
@@ -36,6 +35,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('archived-reviewers', [ChiefEditorController::class, 'archivedReviewers']);
         Route::get('archived-reviewers/{id}', [ChiefEditorController::class, 'showArchivedReviewer']);
     });
+
     Route::prefix('reviewer')->middleware('role:reviewer')->group(function () {
         Route::prefix('articles')->group(function () {
             Route::get('/', [ArticleController::class, 'index']);

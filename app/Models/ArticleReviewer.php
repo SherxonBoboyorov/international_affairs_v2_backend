@@ -84,4 +84,17 @@ class ArticleReviewer extends Model
         ];
         return $statuses[$this->status] ?? $this->status;
     }
+    public function getActiveFilePath(): ?string
+    {
+        return $this->edited_file_path ?? $this->file_path;
+    }
+    public function getActiveFileUrl(): ?string
+    {
+        $path = $this->getActiveFilePath();
+        return $path ? 'https://international-affairs.uz/storage/' . $path : null;
+    }
+    public function hasEditedFile(): bool
+    {
+        return !is_null($this->edited_file_path);
+    }
 }
