@@ -356,6 +356,7 @@ class ArticleReviewersController extends Controller
                     'article_title' => $article->title,
                     'authors_name' => $article->fio,
                     'file_path' => $article->file_path,
+                    'edited_file_path' => $article->edited_file_path,
                     'deadline' => $article->deadline,
                     'status' => $article->status,
                     'type' => 'internal',
