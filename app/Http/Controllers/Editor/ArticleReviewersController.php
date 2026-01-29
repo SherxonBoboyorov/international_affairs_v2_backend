@@ -408,29 +408,12 @@ class ArticleReviewersController extends Controller
             $assignments = $article->assignments->map(function ($assignment) {
                 return [
                     'id' => $assignment->id,
-                    'reviewer' => [
-                        'id' => $assignment->reviewer->id,
-                        'name' => $assignment->reviewer->name,
-                        'email' => $assignment->reviewer->email
-                    ],
+                    'reviewer_id' => $assignment->reviewer->id,
+                    'name' => $assignment->reviewer->name,
                     'status' => $assignment->status,
                     'status_name' => $assignment->status_name,
                     'assigned_at' => $assignment->assigned_at,
                     'deadline' => $assignment->deadline,
-                    'completed_at' => $assignment->completed_at,
-                    'is_overdue' => $assignment->is_overdue,
-                    'comment' => $assignment->comment,
-                    'review_completed' => $assignment->status === 'completed',
-                    'review_data' => $assignment->status === 'completed' ? [
-                        'originality_score' => $assignment->originality_score,
-                        'methodology_score' => $assignment->methodology_score,
-                        'argumentation_score' => $assignment->argumentation_score,
-                        'structure_score' => $assignment->structure_score,
-                        'significance_score' => $assignment->significance_score,
-                        'general_recommendation' => $assignment->general_recommendation,
-                        'review_comments' => $assignment->review_comments,
-                        'review_files' => $assignment->review_files
-                    ] : null
                 ];
             });
 
@@ -454,29 +437,13 @@ class ArticleReviewersController extends Controller
                 'status' => true,
                 'data' => [
                     'id' => $article->id,
-                    'title' => $article->title,
-                    'fio' => $article->fio,
-                    'description' => $article->description,
-                    'file_path' => $article->file_path ?
-                        'https://international-affairs.uz/storage/' . $article->file_path : null,
-                    'edited_file_path' => $article->edited_file_path ?
-                        'https://international-affairs.uz/storage/' . $article->edited_file_path : null,
-                    'active_file_path' => $activeFilePath ?
-                        'https://international-affairs.uz/storage/' . $activeFilePath : null,
+                    'article_title' => $article->title,
+                    'authors_name' => $article->fio,
+                    'file_path' => $article->file_path ? $article->file_path : null,
+                    'edited_file_path' => $article->edited_file_path ? $article->edited_file_path : null,
                     'deadline' => $article->deadline,
                     'status' => $article->status,
-                    'type' => 'internal',
-                    'created_at' => $article->created_at,
-                    'updated_at' => $article->updated_at,
-                    'original_article' => $article->originalArticle,
-
                     'assignments' => $assignments,
-                    'assignments_by_status' => $assignmentsByStatus,
-                    'assignments_summary' => $summary,
-
-                    'has_assignments' => $assignments->count() > 0,
-                    'all_reviews_completed' => $assignments->count() > 0 && $assignments->where('review_completed', false)->count() === 0,
-                    'has_overdue_reviews' => $assignments->where('is_overdue')->count() > 0,
                 ]
             ]);
         }
@@ -494,7 +461,6 @@ class ArticleReviewersController extends Controller
                     'deadline' => null,
                     'status' => $article->status,
                     'type' => 'external',
-
                 ]
             ]);
         }

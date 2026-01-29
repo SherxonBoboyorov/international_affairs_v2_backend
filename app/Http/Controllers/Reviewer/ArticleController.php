@@ -151,16 +151,9 @@ class ArticleController extends Controller
                 'id' => $assignment->id,
                 'article_id' => $assignment->article->id,
                 'title' => $assignment->article->title,
-                'author' => $assignment->article->fio,
                 'deadline' => $assignment->deadline,
                 'status' => $assignment->status,
-                'status_name' => $assignment->status_name,
                 'assigned_at' => $assignment->assigned_at,
-                'is_overdue' => $assignment->is_overdue,
-                'days_until_deadline' => $assignment->deadline ?
-                    now()->diffInDays($assignment->deadline, false) : null,
-                'time_in_progress' => $assignment->assigned_at ?
-                    now()->diffInDays($assignment->assigned_at) : null,
             ];
         });
 
