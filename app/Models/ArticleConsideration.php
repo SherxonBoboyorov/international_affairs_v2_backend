@@ -44,7 +44,6 @@ class ArticleConsideration extends Model
     {
         return $query->where('status', 'appointed');
     }
-
     public function scopeConverted($query)
     {
         return $query->where('status', 'converted');

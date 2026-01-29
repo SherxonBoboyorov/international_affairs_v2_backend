@@ -60,6 +60,10 @@ class ArticleReviewerAssignment extends Model
     {
         return $query->where('status', 'completed');
     }
+    public function scopeRefused($query)
+    {
+        return $query->where('status', 'refused');
+    }
     public function getIsOverdueAttribute()
     {
         return $this->deadline &&
@@ -73,6 +77,7 @@ class ArticleReviewerAssignment extends Model
             'in_progress' => 'В работе',
             'overdue' => 'Просрочено',
             'completed' => 'Завершено',
+            'refused' => 'Отказано',
         ];
         return $statuses[$this->status] ?? $this->status;
     }

@@ -27,8 +27,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('{id}/convert', [ArticleReviewersController::class, 'convertToReviewer']);
             Route::get('{id}', [ArticleReviewersController::class, 'show']);
             Route::post('{id}/send-to-reviewers', [ArticleReviewersController::class, 'sendToReviewers']);
-            Route::get('{id}/assignments', [ArticleReviewersController::class, 'showAssignments']);
-
+            // Route::get('{id}/assignments', [ArticleReviewersController::class, 'showAssignments']);
         });
         Route::get('reviewers/pending', [ChiefEditorController::class, 'pendingReviewers']);
         Route::get('reviewers/approved', [ChiefEditorController::class, 'approvedReviewers']);
@@ -42,9 +41,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('reviewer')->middleware('role:reviewer')->group(function () {
         Route::prefix('articles')->group(function () {
             Route::get('/', [ArticleController::class, 'index']);
+            Route::get('in-progress', [ArticleController::class, 'inProgress']);
             Route::get('{id}', [ArticleController::class, 'show']);
             Route::put('{id}/status', [ArticleController::class, 'updateStatus']);
-            Route::post('{id}/submit-review', [ArticleController::class, 'submitReview']);
         });
     });
     Route::post('logout', [AuthController::class, 'logout']);
