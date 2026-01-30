@@ -8,6 +8,7 @@ use App\Models\ArticleReviewer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -158,7 +159,7 @@ class ArticleReviewersController extends Controller
             'deadline' => $request->deadline,
             'description' => $request->description,
             'status' => 'not_assigned',
-            'created_by' => auth()->id(),
+            'created_by' => Auth::id(),
         ]);
 
         return response()->json([
@@ -211,7 +212,7 @@ class ArticleReviewersController extends Controller
             'deadline' => $request->deadline,
             'description' => $request->description,
             'status' => 'not_assigned',
-            'created_by' => auth()->id(),
+            'created_by' => Auth::id(),
         ]);
 
         $article->update(['status' => 'converted']);
@@ -337,7 +338,7 @@ class ArticleReviewersController extends Controller
                 'deadline' => $request->deadline,
                 'description' => $request->description,
                 'status' => 'assigned',
-                'created_by' => auth()->id(),
+                'created_by' => Auth::id(),
                 'original_article_id' => $article->id,
                 'original_fio' => $article->fio,
                 'original_article_file' => $article->article_file,
@@ -414,6 +415,7 @@ class ArticleReviewersController extends Controller
                     'status_name' => $assignment->status_name,
                     'assigned_at' => $assignment->assigned_at,
                     'deadline' => $assignment->deadline,
+                    'description' => $assignment->comment,
                 ];
             });
 
@@ -440,10 +442,12 @@ class ArticleReviewersController extends Controller
                     'article_title' => $article->title,
                     'authors_name' => $article->fio,
                     'file_path' => $article->file_path ? $article->file_path : null,
+                    'file_name' => $activeFilePath ? basename($activeFilePath) : null,
                     'edited_file_path' => $article->edited_file_path ? $article->edited_file_path : null,
+                    'edited_file_name' => $article->edited_file_path ? basename($article->edited_file_path) : null,
                     'deadline' => $article->deadline,
                     'status' => $article->status,
-                    'assignments' => $assignments,
+                    'assignments' => $assignments
                 ]
             ]);
         }
@@ -460,7 +464,7 @@ class ArticleReviewersController extends Controller
                     'file_path' => 'https://international-affairs.uz/storage/' . $article->article_file,
                     'deadline' => null,
                     'status' => $article->status,
-                    'type' => 'external',
+                    'type' => 'external'
                 ]
             ]);
         }
@@ -469,5 +473,67 @@ class ArticleReviewersController extends Controller
             'status' => false,
             'message' => 'Maqola topilmadi'
         ], 404);
+    }
+
+    public function deadlineExtension(Request $request, $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'reviewers' => 'required|array|min:1',
+            'reviewers.*.reviewer_id' => 'required|exists:users,id',
+            'reviewers.*.new_deadline' => 'required|date|after:today',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $article = ArticleReviewer::findOrFail($id);
+
+        $updatedAssignments = [];
+        $errors = [];
+
+        foreach ($request->reviewers as $reviewerData) {
+            try {
+                $assignment = $article->assignments()
+                    ->where('reviewer_id', $reviewerData['reviewer_id'])
+                    ->firstOrFail();
+
+                $oldDeadline = $assignment->deadline;
+
+                $assignment->update([
+                    'deadline' => $reviewerData['new_deadline'],
+                ]);
+
+                $updatedAssignments[] = [
+                    'reviewer_id' => $assignment->reviewer_id,
+                    'reviewer_name' => $assignment->reviewer->name,
+                    'old_deadline' => $oldDeadline,
+                    'new_deadline' => $assignment->deadline,
+                ];
+
+            } catch (\Exception $e) {
+                $errors[] = [
+                    'reviewer_id' => $reviewerData['reviewer_id'],
+                    'error' => 'Reviewer topilmadi yoki boshqa xatolik'
+                ];
+            }
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'article' => [
+                    'id' => $article->id,
+                    'title' => $article->title,
+                ],
+                'updated_count' => count($updatedAssignments),
+                'error_count' => count($errors),
+                'updated_assignments' => $updatedAssignments,
+                'errors' => $errors
+            ]
+        ]);
     }
 }

@@ -14,7 +14,6 @@ class ReviewCriteria extends Model
         'is_active',
         'sort_order',
     ];
-
     protected $casts = [
         'max_score' => 'decimal:2',
         'is_active' => 'boolean',

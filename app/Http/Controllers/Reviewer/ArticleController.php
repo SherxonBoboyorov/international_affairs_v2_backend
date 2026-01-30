@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ArticleReviewerAssignment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 class ArticleController extends Controller
@@ -13,7 +14,7 @@ class ArticleController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = ArticleReviewerAssignment::with(['article', 'article.originalArticle'])
-            ->where('reviewer_id', auth()->id())
+            ->where('reviewer_id', Auth::id())
             ->where('status', 'assigned')
             ->orderBy('assigned_at', 'desc');
 
@@ -56,7 +57,7 @@ class ArticleController extends Controller
             'article.originalArticle',
             'article.creator'
         ])
-        ->where('reviewer_id', auth()->id())
+        ->where('reviewer_id', Auth::id())
         ->where('id', $id)
         ->firstOrFail();
 
@@ -91,7 +92,7 @@ class ArticleController extends Controller
             ], 422);
         }
 
-        $assignment = ArticleReviewerAssignment::where('reviewer_id', auth()->id())
+        $assignment = ArticleReviewerAssignment::where('reviewer_id', Auth::id())
             ->where('id', $id)
             ->firstOrFail();
 
@@ -127,7 +128,7 @@ class ArticleController extends Controller
     public function inProgress(Request $request): JsonResponse
     {
         $query = ArticleReviewerAssignment::with(['article', 'article.originalArticle'])
-            ->where('reviewer_id', auth()->id())
+            ->where('reviewer_id', Auth::id())
             ->where('status', 'in_progress')
             ->orderBy('assigned_at', 'desc');
 
@@ -153,7 +154,7 @@ class ArticleController extends Controller
                 'title' => $assignment->article->title,
                 'deadline' => $assignment->deadline,
                 'status' => $assignment->status,
-                'assigned_at' => $assignment->assigned_at,
+                'assigned_at' => $assignment->assigned_at
             ];
         });
 

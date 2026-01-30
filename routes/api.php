@@ -27,7 +27,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('{id}/convert', [ArticleReviewersController::class, 'convertToReviewer']);
             Route::get('{id}', [ArticleReviewersController::class, 'show']);
             Route::post('{id}/send-to-reviewers', [ArticleReviewersController::class, 'sendToReviewers']);
-            // Route::get('{id}/assignments', [ArticleReviewersController::class, 'showAssignments']);
+            Route::post('{id}/deadline-extension', [ArticleReviewersController::class, 'deadlineExtension']);
         });
         Route::get('reviewers/pending', [ChiefEditorController::class, 'pendingReviewers']);
         Route::get('reviewers/approved', [ChiefEditorController::class, 'approvedReviewers']);
