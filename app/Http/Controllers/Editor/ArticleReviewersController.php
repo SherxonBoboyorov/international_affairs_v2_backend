@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Editor;
 use App\Http\Controllers\Controller;
 use App\Models\ArticleConsideration;
 use App\Models\ArticleReviewer;
+use App\Models\ReviewCriteria;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -475,12 +477,125 @@ class ArticleReviewersController extends Controller
         ], 404);
     }
 
+
     public function deadlineExtension(Request $request, $id): JsonResponse
+    {
+        $reviewers = [];
+
+        try {
+            if ($request->has('reviewers')) {
+                $reviewersData = $request->reviewers;
+
+                if (is_string($reviewersData)) {
+                    $decodedReviewers = json_decode($reviewersData, true);
+
+                    if (json_last_error() !== JSON_ERROR_NONE) {
+                        return response()->json([
+                            'status' => false,
+                            'message' => 'Invalid JSON format: ' . json_last_error_msg()
+                        ], 422);
+                    }
+
+                    $reviewers = $decodedReviewers;
+                }
+                elseif (is_array($reviewersData)) {
+                    $reviewers = $reviewersData;
+                }
+            }
+
+            if (!is_array($reviewers) || empty($reviewers)) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Reviewers ma\'lumotlari noto\'g\'ri formatda'
+                ], 422);
+            }
+
+            $validator = Validator::make(['reviewers' => $reviewers], [
+                'reviewers' => 'required|array|min:1',
+                'reviewers.*.reviewer_id' => 'required|exists:users,id',
+                'reviewers.*.new_deadline' => 'required|date|after:today',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => false,
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $article = ArticleReviewer::findOrFail($id);
+
+            $updatedAssignments = [];
+            $errors = [];
+
+            foreach ($reviewers as $reviewerData) {
+                try {
+                    $assignment = $article->assignments()
+                        ->where('reviewer_id', $reviewerData['reviewer_id'])
+                        ->firstOrFail();
+
+                    $oldDeadline = $assignment->deadline;
+
+                    $assignment->update([
+                        'deadline' => $reviewerData['new_deadline'],
+                    ]);
+
+                    $updatedAssignments[] = [
+                        'reviewer_id' => $assignment->reviewer_id,
+                        'reviewer_name' => $assignment->reviewer->name,
+                        'old_deadline' => $oldDeadline,
+                        'new_deadline' => $assignment->deadline,
+                    ];
+
+                } catch (\Exception $e) {
+                    $errors[] = [
+                        'reviewer_id' => $reviewerData['reviewer_id'],
+                        'error' => 'Reviewer topilmadi yoki boshqa xatolik: ' . $e->getMessage()
+                    ];
+                }
+            }
+
+            return response()->json([
+                'status' => true,
+                'data' => [
+                    'article' => [
+                        'id' => $article->id,
+                        'title' => $article->title,
+                    ],
+                    'updated_count' => count($updatedAssignments),
+                    'error_count' => count($errors),
+                    'updated_assignments' => $updatedAssignments,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Server xatoligi: ' . $e->getMessage(),
+                'debug' => [
+                    'input_reviewers' => $request->reviewers,
+                    'input_type' => gettype($request->reviewers)
+                ]
+            ], 500);
+        }
+    }
+
+    public function addReviewer(Request $request, $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'reviewers' => 'required|array|min:1',
-            'reviewers.*.reviewer_id' => 'required|exists:users,id',
-            'reviewers.*.new_deadline' => 'required|date|after:today',
+            'reviewers.*.reviewer_id' => [
+                'required',
+                'exists:users,id',
+                function ($attribute, $value, $fail) {
+                    $user = User::find($value);
+                    if (!$user || !$user->hasRole('reviewer') || $user->status !== 'approved') {
+                        $fail('Faqat Chief Editor tomonidan tasdiqlangan reviewerlarni qo\'shish mumkin.');
+                    }
+                },
+            ],
+            'reviewers.*.deadline' => 'required|date|after:today',
+            'reviewers.*.comment' => 'nullable|string|max:500',
         ]);
 
         if ($validator->fails()) {
@@ -492,35 +607,169 @@ class ArticleReviewersController extends Controller
 
         $article = ArticleReviewer::findOrFail($id);
 
-        $updatedAssignments = [];
+        $addedReviewers = [];
         $errors = [];
+        $duplicates = [];
+        $unapproved = [];
 
         foreach ($request->reviewers as $reviewerData) {
+            $reviewerId = $reviewerData['reviewer_id'];
+            $user = User::find($reviewerId);
+
+            if (!$user->hasRole('reviewer') || $user->status !== 'approved') {
+                $unapproved[] = [
+                    'reviewer_id' => $reviewerId,
+                    'reviewer_name' => $user->name,
+                    'email' => $user->email,
+                    'status' => $user->status ?? 'unknown',
+                    'message' => 'Chief Editor tomonidan tasdiqlanmagan'
+                ];
+                continue;
+            }
+
+            $existingAssignment = $article->assignments()
+                ->where('reviewer_id', $reviewerId)
+                ->first();
+
+            if ($existingAssignment) {
+                $duplicates[] = [
+                    'reviewer_id' => $reviewerId,
+                    'reviewer_name' => $existingAssignment->reviewer->name,
+                    'current_status' => $existingAssignment->status,
+                    'current_deadline' => $existingAssignment->deadline,
+                    'message' => 'Bu reviewer allaqachon biriktirilgan'
+                ];
+                continue;
+            }
+
             try {
-                $assignment = $article->assignments()
-                    ->where('reviewer_id', $reviewerData['reviewer_id'])
-                    ->firstOrFail();
-
-                $oldDeadline = $assignment->deadline;
-
-                $assignment->update([
-                    'deadline' => $reviewerData['new_deadline'],
+                $assignment = $article->assignments()->create([
+                    'reviewer_id' => $reviewerId,
+                    'assigned_at' => now(),
+                    'deadline' => $reviewerData['deadline'],
+                    'status' => 'assigned',
+                    'comment' => $reviewerData['comment'] ?? null,
                 ]);
 
-                $updatedAssignments[] = [
+                $addedReviewers[] = [
+                    'assignment_id' => $assignment->id,
                     'reviewer_id' => $assignment->reviewer_id,
                     'reviewer_name' => $assignment->reviewer->name,
-                    'old_deadline' => $oldDeadline,
-                    'new_deadline' => $assignment->deadline,
+                    'reviewer_email' => $assignment->reviewer->email,
+                    'deadline' => $assignment->deadline,
+                    'status' => $assignment->status,
+                    'assigned_at' => $assignment->assigned_at,
+                    'is_approved' => true,
                 ];
 
             } catch (\Exception $e) {
                 $errors[] = [
-                    'reviewer_id' => $reviewerData['reviewer_id'],
-                    'error' => 'Reviewer topilmadi yoki boshqa xatolik'
+                    'reviewer_id' => $reviewerId,
+                    'error' => 'Reviewer qo\'shishda xatolik: ' . $e->getMessage()
                 ];
             }
         }
+
+        $message = '';
+        if (count($addedReviewers) > 0) {
+            $message .= count($addedReviewers) . ' ta reviewer muvaffaqiyatli qo\'shildi. ';
+        }
+        if (count($duplicates) > 0) {
+            $message .= count($duplicates) . ' ta reviewer allaqachon mavjud. ';
+        }
+        if (count($unapproved) > 0) {
+            $message .= count($unapproved) . ' ta reviewer tasdiqlanmagan. ';
+        }
+        if (count($errors) > 0) {
+            $message .= count($errors) . ' ta xatolik yuz berdi.';
+        }
+
+        return response()->json([
+            'status' => true,
+            'message' => $message ?: 'Hech qanday o\'zgarish bo\'lmadi',
+            'data' => [
+                'article' => [
+                    'id' => $article->id,
+                    'title' => $article->title,
+                    'total_reviewers' => $article->assignments()->count(),
+                ],
+                'added_reviewers' => $addedReviewers,
+                'duplicates' => $duplicates,
+                'unapproved' => $unapproved,
+                'errors' => $errors,
+                'summary' => [
+                    'added_count' => count($addedReviewers),
+                    'duplicate_count' => count($duplicates),
+                    'unapproved_count' => count($unapproved),
+                    'error_count' => count($errors),
+                ]
+            ]
+        ]);
+    }
+
+    public function getAvailableReviewers($id): JsonResponse
+    {
+        $article = ArticleReviewer::findOrFail($id);
+
+        $assignedReviewerIds = $article->assignments()->pluck('reviewer_id')->toArray();
+
+        $availableReviewers = User::whereHas('roles', function($q) {
+                $q->where('name', 'reviewer');
+            })
+            ->where('active', 1)
+            ->whereNotIn('id', $assignedReviewerIds)
+            ->select('id', 'name', 'email')
+            ->get();
+
+        return response()->json([
+            'status' => true,
+            'data' => $availableReviewers
+        ]);
+    }
+
+    public function reviews($id): JsonResponse
+    {
+        $article = ArticleReviewer::findOrFail($id);
+
+        $assignments = $article->assignments()
+            ->with(['reviewer'])
+            ->where('status', 'completed')
+            ->get();
+
+        $reviews = $assignments->map(function ($assignment) {
+            $reviewCriteria = ReviewCriteria::active()->get();
+            $savedScores = $assignment->criteria_scores ?? [];
+
+            $scores = [];
+            foreach ($reviewCriteria as $criterion) {
+                $scores[] = [
+                    'id' => $criterion->id,
+                    'name' => $criterion->name_ru,
+                    'score' => $savedScores[$criterion->id] ?? null,
+                    'max_score' => $criterion->max_score,
+                ];
+            }
+
+            return [
+                'reviewer' => [
+                    'id' => $assignment->reviewer->id,
+                    'name' => $assignment->reviewer->name,
+                    'email' => $assignment->reviewer->email,
+                ],
+                'scores' => $scores,
+                'general_recommendation' => $assignment->general_recommendation,
+                'review_comments' => $assignment->review_comments,
+                'review_files' => $assignment->review_files ?
+                    collect($assignment->review_files)->map(function ($file) {
+                        return [
+                            'path' => $file,
+                            'url' =>  $file,
+                            'name' => basename($file)
+                        ];
+                    }) : [],
+                'completed_at' => $assignment->completed_at,
+            ];
+        });
 
         return response()->json([
             'status' => true,
@@ -529,10 +778,8 @@ class ArticleReviewersController extends Controller
                     'id' => $article->id,
                     'title' => $article->title,
                 ],
-                'updated_count' => count($updatedAssignments),
-                'error_count' => count($errors),
-                'updated_assignments' => $updatedAssignments,
-                'errors' => $errors
+                'reviews' => $reviews,
+                'total_reviews' => $reviews->count(),
             ]
         ]);
     }

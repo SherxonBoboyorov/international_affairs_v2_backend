@@ -7,15 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 class ReviewCriteria extends Model
 {
     protected $fillable = [
-        'name',
         'name_ru',
         'name_uz',
+        'name_en',
         'max_score',
         'is_active',
         'sort_order',
     ];
     protected $casts = [
-        'max_score' => 'decimal:2',
+        'max_score' => 'integer',
         'is_active' => 'boolean',
         'sort_order' => 'integer'
     ];
@@ -27,6 +27,20 @@ class ReviewCriteria extends Model
 
     public function getFieldNameAttribute()
     {
-        return str_replace(' ', '_', strtolower($this->name)) . '_score';
+        return $this->id;
+    }
+
+    public function getLocalizedNameAttribute()
+    {
+        $locale = app()->getLocale();
+
+        switch ($locale) {
+            case 'ru':
+                return $this->name_ru;
+            case 'uz':
+                return $this->name_uz;
+            default:
+                return $this->name_en;
+        }
     }
 }

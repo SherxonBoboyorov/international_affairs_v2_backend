@@ -28,6 +28,10 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('{id}', [ArticleReviewersController::class, 'show']);
             Route::post('{id}/send-to-reviewers', [ArticleReviewersController::class, 'sendToReviewers']);
             Route::post('{id}/deadline-extension', [ArticleReviewersController::class, 'deadlineExtension']);
+            Route::post('{id}/add-reviewer', [ArticleReviewersController::class, 'addReviewer']);
+
+            Route::get('{id}/available-reviewers', [ArticleReviewersController::class, 'getAvailableReviewers']);
+
         });
         Route::get('reviewers/pending', [ChiefEditorController::class, 'pendingReviewers']);
         Route::get('reviewers/approved', [ChiefEditorController::class, 'approvedReviewers']);
@@ -44,6 +48,8 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('in-progress', [ArticleController::class, 'inProgress']);
             Route::get('{id}', [ArticleController::class, 'show']);
             Route::put('{id}/status', [ArticleController::class, 'updateStatus']);
+            Route::post('{id}/submit-review', [ArticleController::class, 'submitReview']);
+            Route::get('completed', [ArticleController::class, 'completed']);
         });
     });
     Route::post('logout', [AuthController::class, 'logout']);
@@ -54,4 +60,5 @@ Route::group([
 ], function () {
     Route::get('scientific-activity', [RequirementsController::class, 'scientificActivity']);
     Route::get('reviewer-requirements', [RequirementsController::class, 'reviewerRequirements']);
+    Route::get('review-criteria', [RequirementsController::class, 'reviewCriteria']);
 });
