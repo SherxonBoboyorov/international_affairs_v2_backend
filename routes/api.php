@@ -46,10 +46,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::prefix('articles')->group(function () {
             Route::get('/', [ArticleController::class, 'index']);
             Route::get('in-progress', [ArticleController::class, 'inProgress']);
+            Route::get('completed', [ArticleController::class, 'completed']);
+            Route::get('completed/{id}', [ArticleController::class, 'completedShow']);
+            Route::get('in-progress/{id}', [ArticleController::class, 'inProgressShow']);
+            Route::post('{id}/save-draft-review', [ArticleController::class, 'saveDraft']);
             Route::get('{id}', [ArticleController::class, 'show']);
             Route::put('{id}/status', [ArticleController::class, 'updateStatus']);
             Route::post('{id}/submit-review', [ArticleController::class, 'submitReview']);
-            Route::get('completed', [ArticleController::class, 'completed']);
         });
     });
     Route::post('logout', [AuthController::class, 'logout']);
