@@ -108,21 +108,33 @@ class ArticleController extends Controller
             $newStatus = 'in_progress';
             $message = 'Maqola qabul qilindi va ish boshlandi';
             $comment = null;
+
+            $statusData = [
+                'in_progress_at' => now(),
+            ];
         } else {
             $newStatus = 'refused';
             $message = 'Maqola rad etildi';
             $comment = $request->comment;
+
+            $statusData = [
+                'refused_at' => now(),
+            ];
         }
 
         $assignment->update([
             'status' => $newStatus,
             'comment' => $comment,
+            ...$statusData,
         ]);
 
         return response()->json([
             'status' => true,
             'message' => $message,
-            'data' => $assignment->load(['article'])
+            'data' => [
+                'assignment' => $assignment->load(['article']),
+                'status_changed_at' => $statusData,
+            ]
         ]);
     }
 
@@ -191,17 +203,8 @@ class ArticleController extends Controller
             }
         }
 
-        $draftData = null;
-        if ($assignment->has_valid_draft) {
-            $draftData = [
-                'general_recommendation' => $assignment->draft_general_recommendation,
-                'review_comments' => $assignment->draft_review_comments,
-                'draft_files' => $assignment->draft_review_files,
-                'expires_at' => $assignment->draft_expires_at,
-                'last_saved_at' => $assignment->draft_last_saved_at,
-                'deadline_at' => $assignment->deadline,
-            ];
-        }
+        $activeFilePath = $assignment->article->getActiveFilePath();
+        $activeFileUrl = $activeFilePath ? $activeFilePath : null;
 
         return response()->json([
             'status' => true,
@@ -209,10 +212,10 @@ class ArticleController extends Controller
                 'id' => $assignment->id,
                 'article_id' => $assignment->article->id,
                 'title' => $assignment->article->title,
+                'description' => $assignment->article->description,
+                'file_path' => $activeFileUrl,
                 'assigned_at' => $assignment->assigned_at,
                 'deadline' => $assignment->deadline,
-                'status' => $assignment->status,
-
                 'review_criteria' => $reviewCriteria->map(function ($criterion) use ($savedScoresDraft) {
                     return [
                         'id' => $criterion->id,
@@ -225,7 +228,12 @@ class ArticleController extends Controller
                 }),
 
                 'has_draft' => $assignment->has_valid_draft,
-                'draft' => $draftData,
+                'general_recommendation' => $assignment->draft_general_recommendation,
+                'review_comments' => $assignment->draft_review_comments,
+                'draft_files' => $assignment->draft_review_files,
+                'expires_at' => $assignment->draft_expires_at,
+                'last_saved_at' => $assignment->draft_last_saved_at,
+                'deadline_at' => $assignment->deadline,
             ],
         ]);
     }
@@ -441,13 +449,17 @@ class ArticleController extends Controller
             'general_recommendation' => $assignment->general_recommendation,
             'review_comments' => $assignment->review_comments,
             'review_files' => $assignment->review_files,
-            'action_history' => [
-                'start_review' => $assignment->assigned_at,
-                'save_draft' => $assignment->draft_last_saved_at,
+            'draft_files' => $assignment->draft_review_files,
+            'status_dates' => [
+                'assigned_at' => $assignment->assigned_at,
+                'in_progress_at' => $assignment->in_progress_at,
+                'refused_at' => $assignment->refused_at,
                 'completed_at' => $assignment->completed_at,
-            ]
+                'status_changed_at' => $assignment->status_changed_at,
+                'deadline' => $assignment->deadline,
+                'extension_date' => $assignment->deadline_extended_at,
+            ],
         ];
-
     }
 
     public function saveDraft(Request $request, $id): JsonResponse
@@ -468,7 +480,7 @@ class ArticleController extends Controller
         $rules['general_recommendation'] = 'nullable|in:accept,after_revision,reject';
         $rules['review_comments'] = 'nullable|string|max:5000';
         $rules['draft_files'] = 'nullable|array';
-        $rules['draft_files.*'] = 'file|mimes:pdf,doc,docx|max:10240';
+        $rules['draft_files.*'] = 'file|mimes:pdf,doc,docx';
 
         $validator = Validator::make($request->all(), $rules);
 

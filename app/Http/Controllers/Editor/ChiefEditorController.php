@@ -278,6 +278,4 @@ class ChiefEditorController extends Controller
             'data' => $data
         ]);
     }
-
-    
 }

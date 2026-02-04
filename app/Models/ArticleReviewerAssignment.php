@@ -13,7 +13,10 @@ class ArticleReviewerAssignment extends Model
         'article_reviewer_id',
         'reviewer_id',
         'assigned_at',
+        'in_progress_at',
+        'refused_at',
         'deadline',
+        'deadline_extended_at',
         'status',
         'comment',
         'completed_at',
@@ -32,7 +35,10 @@ class ArticleReviewerAssignment extends Model
 
     protected $casts = [
         'assigned_at' => 'datetime',
+        'in_progress_at' => 'datetime',
+        'refused_at' => 'datetime',
         'deadline' => 'datetime',
+        'deadline_extended_at' => 'datetime',
         'completed_at' => 'datetime',
         'review_files' => 'array',
         'draft_review_files' => 'array',
@@ -53,10 +59,60 @@ class ArticleReviewerAssignment extends Model
         return $this->belongsTo(User::class, 'reviewer_id');
     }
 
+    public function deadlineExtendedBy()
+    {
+        return $this->belongsTo(User::class, 'deadline_extended_by');
+    }
+
+    public function getWasDeadlineExtendedAttribute()
+    {
+        return !is_null($this->deadline_extended_at);
+    }
+
+    public function getDeadlineExtensionInfoAttribute()
+    {
+        if (!$this->was_deadline_extended) {
+            return null;
+        }
+
+        return [
+            'extended_at' => $this->deadline_extended_at,
+        ];
+    }
+
+    public function getInProgressAtAttribute($value)
+    {
+        return $value ? new \Carbon\Carbon($value) : null;
+    }
+
+    public function getRefusedAtAttribute($value)
+    {
+        return $value ? new \Carbon\Carbon($value) : null;
+    }
+
+    public function getCompletedAtAttribute($value)
+    {
+        return $value ? new \Carbon\Carbon($value) : null;
+    }
+
+    public function getStatusChangedAtAttribute()
+    {
+        switch ($this->status) {
+            case 'in_progress':
+                return $this->in_progress_at;
+            case 'refused':
+                return $this->refused_at;
+            case 'completed':
+                return $this->completed_at;
+            default:
+                return $this->assigned_at;
+        }
+    }
+
     public function getCriteriaScore($criteriaId)
     {
         $scores = $this->criteria_scores ?? [];
-        return $scores[$criteriaId] ?? null;
+        return $scores[$criteriaId] ?? 0;
     }
 
     public function setCriteriaScore($criteriaId, $score)
@@ -142,7 +198,6 @@ class ArticleReviewerAssignment extends Model
             'draft_criteria_scores' => null,
             'draft_general_recommendation' => null,
             'draft_review_comments' => null,
-            'draft_review_files' => null,
             'draft_expires_at' => null,
         ]);
     }

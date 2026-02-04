@@ -416,8 +416,7 @@ class ArticleReviewersController extends Controller
                     'status' => $assignment->status,
                     'status_name' => $assignment->status_name,
                     'assigned_at' => $assignment->assigned_at,
-                    'deadline' => $assignment->deadline,
-                    'description' => $assignment->comment,
+                    'description' => $assignment->comment
                 ];
             });
 
@@ -434,7 +433,9 @@ class ArticleReviewersController extends Controller
                 'in_progress' => $assignments->where('status', 'in_progress')->count(),
                 'overdue' => $assignments->where('status', 'overdue')->count(),
                 'completed' => $assignments->where('status', 'completed')->count(),
-                'pending_reviews' => $assignments->where('review_completed', false)->count(),
+                'pending_reviews' => $assignments->where('status', '!=', 'completed')->count(),
+                'has_overdue' => $assignments->where('is_overdue', true)->count() > 0,
+                'has_extended_deadlines' => $assignments->where('deadline_info.was_extended', true)->count() > 0,
             ];
 
             return response()->json([
@@ -449,7 +450,7 @@ class ArticleReviewersController extends Controller
                     'edited_file_name' => $article->edited_file_path ? basename($article->edited_file_path) : null,
                     'deadline' => $article->deadline,
                     'status' => $article->status,
-                    'assignments' => $assignments
+                    'assignments' => $assignments,
                 ]
             ]);
         }
@@ -466,7 +467,10 @@ class ArticleReviewersController extends Controller
                     'file_path' => 'https://international-affairs.uz/storage/' . $article->article_file,
                     'deadline' => null,
                     'status' => $article->status,
-                    'type' => 'external'
+                    'status_name' => $article->status_name,
+                    'type' => 'external',
+                    'created_at' => $article->created_at,
+                    'updated_at' => $article->updated_at,
                 ]
             ]);
         }
@@ -477,6 +481,168 @@ class ArticleReviewersController extends Controller
         ], 404);
     }
 
+    public function getReviewerReview($articleId, $reviewerId): JsonResponse
+    {
+        $article = ArticleReviewer::find($articleId);
+
+        if (!$article) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Maqola topilmadi'
+            ], 404);
+        }
+
+        $assignment = $article->assignments()
+            ->with(['reviewer'])
+            ->where('reviewer_id', $reviewerId)
+            ->first();
+
+        if (!$assignment) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Reviewer topilmadi'
+            ], 404);
+        }
+
+        $reviewData = null;
+
+        if ($assignment->status === 'completed') {
+            $reviewCriteria = ReviewCriteria::active()->get();
+            $savedScores = $assignment->criteria_scores ?? [];
+
+            $scores = [];
+            foreach ($reviewCriteria as $criterion) {
+                $scores[] = [
+                    'id' => $criterion->id,
+                    'name_ru' => $criterion->name_ru,
+                    'name_uz' => $criterion->name_uz,
+                    'name_en' => $criterion->name_en,
+                    'max_score' => $criterion->max_score,
+                    'score' => $savedScores[$criterion->id] ?? null,
+                ];
+            }
+
+            $reviewFiles = [];
+            if ($assignment->review_files) {
+                if (is_string($assignment->review_files)) {
+                    $files = json_decode($assignment->review_files, true) ?? [];
+                } else {
+                    $files = $assignment->review_files;
+                }
+
+                foreach ($files as $file) {
+                    if (is_array($file)) {
+                        $reviewFiles[] = [
+                            'path' => $file['path'],
+                            'name' => $file['name'] ?? null,
+                        ];
+                    } else {
+                        $reviewFiles[] = [
+                            'path' => $file,
+                            'name' => basename($file),
+                        ];
+                    }
+                }
+            }
+
+            $draftFiles = [];
+            if ($assignment->draft_review_files) {
+                if (is_string($assignment->draft_review_files)) {
+                    $draftFilesData = json_decode($assignment->draft_review_files, true) ?? [];
+                } else {
+                    $draftFilesData = $assignment->draft_review_files;
+                }
+
+                foreach ($draftFilesData as $file) {
+                    if (is_array($file)) {
+                        $draftFiles[] = [
+                            'path' => $file['path'],
+                            'name' => $file['name'] ?? null,
+                        ];
+                    } else {
+                        $draftFiles[] = [
+                            'path' => $file,
+                            'name' => basename($file),
+                        ];
+                    }
+                }
+            }
+
+            $reviewData = [
+                'scores' => $scores,
+                'general_recommendation' => $assignment->general_recommendation,
+                'review_comments' => $assignment->review_comments,
+                'review_files' => $reviewFiles,
+                'draft_files' => $draftFiles,
+                'completed_at' => $assignment->completed_at,
+            ];
+
+        } elseif ($assignment->status === 'refused') {
+            $reviewData = [
+                'comment' => $assignment->comment,
+            ];
+
+        } elseif ($assignment->status === 'in_progress') {
+            $draftFiles = [];
+            if ($assignment->draft_review_files) {
+                if (is_string($assignment->draft_review_files)) {
+                    $draftFilesData = json_decode($assignment->draft_review_files, true) ?? [];
+                } else {
+                    $draftFilesData = $assignment->draft_review_files;
+                }
+
+                foreach ($draftFilesData as $file) {
+                    if (is_array($file)) {
+                        $draftFiles[] = [
+                            'path' => $file['path'],
+                            'name' => $file['name'] ?? null,
+                        ];
+                    } else {
+                        $draftFiles[] = [
+                            'path' => $file,
+                            'name' => basename($file),
+                        ];
+                    }
+                }
+            }
+
+            $reviewData = [
+                'draft_files' => $draftFiles,
+                'in_progress_at' => $assignment->in_progress_at,
+                'deadline' => $assignment->deadline,
+            ];
+
+        } else {
+            $reviewData = [
+                'type' => 'assigned_review',
+                'assigned_at' => $assignment->assigned_at,
+                'deadline' => $assignment->deadline,
+            ];
+        }
+
+        return response()->json([
+            'status' => true,
+            'data' => [
+                'reviewer' => [
+                    'id' => $assignment->reviewer->id,
+                    'name' => $assignment->reviewer->name,
+                    'email' => $assignment->reviewer->email,
+                ],
+                'current_status' => $assignment->status,
+                'status_name' => $assignment->status_name,
+                'review_data' => $reviewData,
+                'status_dates' => [
+                    'assigned_at' => $assignment->assigned_at,
+                    'in_progress_at' => $assignment->in_progress_at,
+                    'refused_at' => $assignment->refused_at,
+                    'completed_at' => $assignment->completed_at,
+                    'status_changed_at' => $assignment->status_changed_at,
+                    'deadline' => $assignment->deadline,
+                    'extension_date' => $assignment->deadline_extended_at,
+                ],
+            ]
+        ]);
+    }
 
     public function deadlineExtension(Request $request, $id): JsonResponse
     {
@@ -527,6 +693,7 @@ class ArticleReviewersController extends Controller
 
             $updatedAssignments = [];
             $errors = [];
+            $extensionDate = now();
 
             foreach ($reviewers as $reviewerData) {
                 try {
@@ -538,6 +705,7 @@ class ArticleReviewersController extends Controller
 
                     $assignment->update([
                         'deadline' => $reviewerData['new_deadline'],
+                        'deadline_extended_at' => $extensionDate,
                     ]);
 
                     $updatedAssignments[] = [
@@ -545,6 +713,7 @@ class ArticleReviewersController extends Controller
                         'reviewer_name' => $assignment->reviewer->name,
                         'old_deadline' => $oldDeadline,
                         'new_deadline' => $assignment->deadline,
+                        'extended_at' => $extensionDate,
                     ];
 
                 } catch (\Exception $e) {
@@ -562,6 +731,7 @@ class ArticleReviewersController extends Controller
                         'id' => $article->id,
                         'title' => $article->title,
                     ],
+                    'extension_date' => $extensionDate,
                     'updated_count' => count($updatedAssignments),
                     'error_count' => count($errors),
                     'updated_assignments' => $updatedAssignments,
