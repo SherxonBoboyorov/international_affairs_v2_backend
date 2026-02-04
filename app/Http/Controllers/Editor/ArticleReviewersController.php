@@ -170,12 +170,13 @@ class ArticleReviewersController extends Controller
             'data' => $article
         ]);
     }
+
     public function convertToReviewer(Request $request, $id): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'title' => 'required|string|max:500',
             'fio' => 'required|string|max:255',
-            'edited_file' => 'required|file|mimes:pdf,doc,docx|max:10240',
+            'edited_file' => 'required|file|mimes:pdf,doc,docx',
             'deadline' => 'nullable|date',
             'description' => 'nullable|string|max:2000',
         ]);
@@ -190,21 +191,30 @@ class ArticleReviewersController extends Controller
         $article = ArticleConsideration::findOrFail($id);
 
         $editedFilePath = null;
+        $editedFileName = null;
+
         if ($request->hasFile('edited_file')) {
             $file = $request->file('edited_file');
 
-            $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+            $originalName = $file->getClientOriginalName();
             $extension = $file->getClientOriginalExtension();
+            $nameWithoutExt = pathinfo($originalName, PATHINFO_FILENAME);
 
-            $safeName = Str::slug($originalName);
-            if (!$safeName) {
-                $safeName = 'edited-file';
+            $cleanName = preg_replace('/[^A-Za-z0-9.\-_]/', '_', $nameWithoutExt);
+            if (!$cleanName) {
+                $cleanName = 'edited-file';
             }
 
-            $finalName = $safeName . '_' . time() . '.' . $extension;
+            $timestamp = now()->format('YmdHis');
+            $userId = Auth::id();
+            $random = Str::random(6);
+            $finalName = "converted_{$timestamp}_user{$userId}_{$random}_{$cleanName}.{$extension}";
 
             $editedFilePath = $file->storeAs('article_reviewers/edited', $finalName, 'public');
+            $editedFileName = $originalName;
         }
+
+        $originalCreatedAt = $article->created_at;
 
         $reviewerArticle = ArticleReviewer::create([
             'title' => $request->title,
@@ -215,6 +225,8 @@ class ArticleReviewersController extends Controller
             'description' => $request->description,
             'status' => 'not_assigned',
             'created_by' => Auth::id(),
+            'created_at' => $originalCreatedAt,
+            'updated_at' => now(),
         ]);
 
         $article->update(['status' => 'converted']);
@@ -226,16 +238,17 @@ class ArticleReviewersController extends Controller
                 'id' => $reviewerArticle->id,
                 'title' => $reviewerArticle->title,
                 'fio' => $reviewerArticle->fio,
-                'file_path' => $reviewerArticle->file_path
-                    ? asset('storage/' . $reviewerArticle->file_path)
-                    : null,
-                'edited_file_path' => $editedFilePath
-                    ? asset('storage/' . $editedFilePath)
-                    : null,
+                'file_path' => $reviewerArticle->file_path ? $reviewerArticle->file_path : null,
+                'edited_file_path' => $editedFilePath ? $editedFilePath : null,
+                'edited_file_name' => $editedFileName,
+                'original_file_name' => $editedFileName,
+                'stored_file_name' => basename($editedFilePath),
                 'deadline' => $reviewerArticle->deadline,
                 'status' => $reviewerArticle->status,
                 'type' => 'internal',
-                'created_at' => $reviewerArticle->created_at
+                'created_at' => $originalCreatedAt,
+                'updated_at' => $reviewerArticle->updated_at,
+                'conversion_date' => now(),
             ]
         ]);
     }
@@ -416,7 +429,7 @@ class ArticleReviewersController extends Controller
                     'status' => $assignment->status,
                     'status_name' => $assignment->status_name,
                     'assigned_at' => $assignment->assigned_at,
-                    'description' => $assignment->comment
+                    'general_recommendation' => $assignment->general_recommendation,
                 ];
             });
 
@@ -450,6 +463,7 @@ class ArticleReviewersController extends Controller
                     'edited_file_name' => $article->edited_file_path ? basename($article->edited_file_path) : null,
                     'deadline' => $article->deadline,
                     'status' => $article->status,
+                    'type' => 'internal',
                     'assignments' => $assignments,
                 ]
             ]);
@@ -534,12 +548,12 @@ class ArticleReviewersController extends Controller
                     if (is_array($file)) {
                         $reviewFiles[] = [
                             'path' => $file['path'],
-                            'name' => $file['name'] ?? null,
+                            'name' => $file['original_name'] ?? null,
                         ];
                     } else {
                         $reviewFiles[] = [
                             'path' => $file,
-                            'name' => basename($file),
+                            'name' => $file->original_name
                         ];
                     }
                 }
@@ -557,12 +571,12 @@ class ArticleReviewersController extends Controller
                     if (is_array($file)) {
                         $draftFiles[] = [
                             'path' => $file['path'],
-                            'name' => $file['name'] ?? null,
+                            'name' => $file['original_name'] ?? null,
                         ];
                     } else {
                         $draftFiles[] = [
                             'path' => $file,
-                            'name' => basename($file),
+                            'name' => $file->original_name
                         ];
                     }
                 }
@@ -595,12 +609,12 @@ class ArticleReviewersController extends Controller
                     if (is_array($file)) {
                         $draftFiles[] = [
                             'path' => $file['path'],
-                            'name' => $file['name'] ?? null,
+                            'name' => $file['original_name'] ?? null,
                         ];
                     } else {
                         $draftFiles[] = [
                             'path' => $file,
-                            'name' => basename($file),
+                            'name' => $file->original_name
                         ];
                     }
                 }
@@ -623,15 +637,14 @@ class ArticleReviewersController extends Controller
         return response()->json([
             'status' => true,
             'data' => [
-                'reviewer' => [
-                    'id' => $assignment->reviewer->id,
-                    'name' => $assignment->reviewer->name,
-                    'email' => $assignment->reviewer->email,
-                ],
+                'id' => $assignment->reviewer->id,
+                'name' => $assignment->reviewer->name,
+                'description' => $assignment->article->description,
                 'current_status' => $assignment->status,
                 'status_name' => $assignment->status_name,
                 'review_data' => $reviewData,
                 'status_dates' => [
+                    'created_at' => $assignment->created_at,
                     'assigned_at' => $assignment->assigned_at,
                     'in_progress_at' => $assignment->in_progress_at,
                     'refused_at' => $assignment->refused_at,
@@ -879,16 +892,30 @@ class ArticleReviewersController extends Controller
 
     public function getAvailableReviewers($id): JsonResponse
     {
-        $article = ArticleReviewer::findOrFail($id);
+        $assignedReviewerIds = [];
 
-        $assignedReviewerIds = $article->assignments()->pluck('reviewer_id')->toArray();
+        $articleReviewer = ArticleReviewer::find($id);
+        if ($articleReviewer) {
+            $assignedReviewerIds = $articleReviewer->assignments()->pluck('reviewer_id')->toArray();
+        }
+
+        $articleConsideration = ArticleConsideration::find($id);
+        if ($articleConsideration) {
+        }
+
+        if (!$articleReviewer && !$articleConsideration) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Maqola topilmadi'
+            ], 404);
+        }
 
         $availableReviewers = User::whereHas('roles', function($q) {
                 $q->where('name', 'reviewer');
             })
             ->where('active', 1)
             ->whereNotIn('id', $assignedReviewerIds)
-            ->select('id', 'name', 'email')
+            ->select('id', 'name')
             ->get();
 
         return response()->json([

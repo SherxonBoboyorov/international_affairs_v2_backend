@@ -23,6 +23,7 @@ class ArticleReviewer extends Model
         'original_fio',
         'original_article_file',
         'original_title',
+        'created_at'
     ];
     protected $casts = [
         'created_at' => 'datetime',
